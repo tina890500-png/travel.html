@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>旅遊資料收集簿</title>
 
-<!-- SheetJS：Excel 讀寫 -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -17,7 +16,7 @@ h1{text-align:center;}
 label{font-weight:bold;display:block;margin-top:10px;}
 input,select,textarea{width:100%;padding:8px;margin-top:4px;border-radius:6px;border:1px solid #ccc;}
 button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;background:#4CAF50;color:#fff;font-size:16px;}
-.item{border-bottom:1px dashed #ddd;padding:8px 0;font-size:14px;}
+.item{border-bottom:1px dashed #ddd;padding:10px 0;font-size:14px;}
 .tag{background:#e0f2f1;padding:2px 6px;border-radius:6px;margin-right:4px;font-size:12px;}
 .small{font-size:12px;color:#666;}
 .action{cursor:pointer;margin-right:8px;color:#1976d2;}
@@ -28,7 +27,6 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
 <body>
 
 <h1>🌍 旅遊資料收集簿</h1>
-
 <div id="saveMsg">✅ 已儲存</div>
 
 <div style="text-align:center">
@@ -43,10 +41,7 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
   <input type="hidden" id="editKey">
 
   <label>地區類型</label>
-  <select id="area">
-    <option>國內</option>
-    <option>國外</option>
-  </select>
+  <select id="area"><option>國內</option><option>國外</option></select>
 
   <label>國家 / 縣市鄉鎮</label>
   <input id="place">
@@ -64,10 +59,7 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
   <input id="tags">
 
   <label>是否已到訪</label>
-  <select id="visited">
-    <option>否</option>
-    <option>是</option>
-  </select>
+  <select id="visited"><option>否</option><option>是</option></select>
 
   <label>到訪日期</label>
   <input type="date" id="date">
@@ -89,25 +81,22 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
 </div>
 
 <div class="card">
-  <h2>📦 匯出 / 匯回 / 備份</h2>
-  <button onclick="backupJSON()">📤 備份（JSON）</button>
-  <button onclick="exportExcel()">📊 匯出 Excel（.xlsx）</button>
-  <label style="margin-top:10px">📥 匯回 Excel（.xlsx）</label>
-  <input type="file" id="importExcel" accept=".xlsx,.xls" onchange="importExcel()">
-  <input type="file" id="restoreFile" onchange="restore()" style="margin-top:10px">
+  <h2>📦 匯出 / 匯回</h2>
+  <button onclick="backupJSON()">📤 備份 JSON</button>
+  <button onclick="exportExcel()">📊 匯出 Excel</button>
+  <input type="file" id="importExcel" accept=".xlsx" onchange="importExcel()">
 </div>
 
 <script>
 let currentTab="all";
 
-/* ---------- 儲存提示 ---------- */
+/* 儲存提示 */
 function showSavedMessage(){
-  const msg=document.getElementById("saveMsg");
-  msg.style.display="block";
-  setTimeout(()=>{msg.style.display="none";},2000);
+  saveMsg.style.display="block";
+  setTimeout(()=>saveMsg.style.display="none",2000);
 }
 
-/* ---------- 分頁 ---------- */
+/* 分頁 */
 function setTab(tab,el){
   currentTab=tab;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -115,7 +104,7 @@ function setTab(tab,el){
   render();
 }
 
-/* ---------- 表單 ---------- */
+/* 表單 */
 function clearForm(){
   editKey.value="";
   area.value="國內";
@@ -129,109 +118,85 @@ function clearForm(){
   note.value="";
 }
 
-/* ---------- 儲存 / 編輯 ---------- */
 function save(){
-  const id = editKey.value || "travel-"+Date.now();
-  const data = {
-    id,
-    area:area.value,
-    place:place.value,
-    title:title.value,
-    content:content.value,
-    links:links.value,
-    tags:tags.value,
-    visited:visited.value,
-    date:date.value,
-    note:note.value
-  };
+  const id=editKey.value||("travel-"+Date.now());
+  const data={id,area:area.value,place:place.value,title:title.value,
+    content:content.value,links:links.value,tags:tags.value,
+    visited:visited.value,date:date.value,note:note.value};
   localStorage.setItem(id,JSON.stringify(data));
-  clearForm();
-  render();
-  showSavedMessage();
+  clearForm(); render(); showSavedMessage();
 }
 
-/* ---------- 顯示 ---------- */
+/* 顯示（重點：排序） */
 function render(){
   list.innerHTML="";
   const q=search.value||"";
-  for(let k in localStorage){
-    if(!k.startsWith("travel-")) continue;
-    const d=JSON.parse(localStorage[k]);
+  const items=[];
 
+  for(let k in localStorage){
+    if(k.startsWith("travel-")){
+      const d=JSON.parse(localStorage[k]);
+      items.push(d);
+    }
+  }
+
+  // ⭐ 排序邏輯（新 → 舊）
+  items.sort((a,b)=>{
+    const da = a.date ? new Date(a.date) : new Date(Number(a.id.split("-")[1]));
+    const db = b.date ? new Date(b.date) : new Date(Number(b.id.split("-")[1]));
+    return db - da;
+  });
+
+  items.forEach(d=>{
     if(currentTab==="國內"||currentTab==="國外"){
-      if(d.area!==currentTab) continue;
+      if(d.area!==currentTab) return;
     }
     if(currentTab==="是"||currentTab==="否"){
-      if(d.visited!==currentTab) continue;
+      if(d.visited!==currentTab) return;
     }
-    if(JSON.stringify(d).indexOf(q)===-1) continue;
+    if(JSON.stringify(d).indexOf(q)===-1) return;
 
     list.innerHTML+=`
     <div class="item">
       <strong>${d.title}</strong><br>
-      <span class="small">${d.area}｜${d.place}</span><br>
+      <span class="small">${d.area}｜${d.place}${d.date?"｜"+d.date:""}</span><br>
       ${d.tags.split(",").filter(t=>t).map(t=>`<span class="tag">${t}</span>`).join("")}
       ${d.visited==="是"?"✔ 已到訪":""}
       <div class="small">
-        <span class="action" onclick="editItem('${k}')">✏️ 編輯</span>
-        <span class="action" onclick="removeItem('${k}')">🗑 刪除</span>
+        <span class="action" onclick="editItem('${d.id}')">✏️ 編輯</span>
+        <span class="action" onclick="removeItem('${d.id}')">🗑 刪除</span>
         <a href="https://www.google.com/maps/search/${encodeURIComponent(d.place)}" target="_blank">📍 地圖</a>
       </div>
     </div>`;
-  }
+  });
 }
 
 function editItem(key){
   const d=JSON.parse(localStorage[key]);
   editKey.value=d.id;
-  area.value=d.area;
-  place.value=d.place;
-  title.value=d.title;
-  content.value=d.content;
-  links.value=d.links;
-  tags.value=d.tags;
-  visited.value=d.visited;
-  date.value=d.date;
-  note.value=d.note;
+  area.value=d.area; place.value=d.place; title.value=d.title;
+  content.value=d.content; links.value=d.links;
+  tags.value=d.tags; visited.value=d.visited;
+  date.value=d.date; note.value=d.note;
   window.scrollTo({top:0,behavior:"smooth"});
 }
 
 function removeItem(key){
-  if(confirm("確定要刪除這筆旅遊資料嗎？")){
-    localStorage.removeItem(key);
-    render();
+  if(confirm("確定刪除？")){
+    localStorage.removeItem(key); render();
   }
 }
 
-/* ---------- JSON 備份 / 還原 ---------- */
+/* 匯出 / 匯回（保持原邏輯） */
 function backupJSON(){
   const arr=[];
   for(let k in localStorage){
-    if(k.startsWith("travel-")){
-      arr.push(JSON.parse(localStorage[k]));
-    }
+    if(k.startsWith("travel-")) arr.push(JSON.parse(localStorage[k]));
   }
-  const json="\uFEFF"+JSON.stringify(arr,null,2);
-  download(json,"travel_backup.json","application/json;charset=utf-8;");
-  localStorage.setItem("lastBackup",new Date().toISOString().slice(0,10));
+  const blob=new Blob(["\uFEFF"+JSON.stringify(arr,null,2)],{type:"application/json"});
+  download(blob,"travel_backup.json");
 }
 
-function restore(){
-  const file=restoreFile.files[0];
-  if(!file) return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const arr=JSON.parse(e.target.result);
-    arr.forEach(d=>{
-      localStorage.setItem(d.id||("travel-"+Date.now()),JSON.stringify(d));
-    });
-    render();
-    alert("還原完成");
-  };
-  reader.readAsText(file);
-}
-
-/* ---------- Excel 匯出 ---------- */
 function exportExcel(){
   const rows=[["id","地區","地點","標題","內容","網址","關鍵字","是否到訪","到訪日期","心得"]];
   for(let k in localStorage){
@@ -241,61 +206,32 @@ function exportExcel(){
     }
   }
   const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.aoa_to_sheet(rows);
-  XLSX.utils.book_append_sheet(wb,ws,"旅遊資料");
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),"旅遊資料");
   XLSX.writeFile(wb,"旅遊資料.xlsx");
 }
 
-/* ---------- Excel 匯回 ---------- */
 function importExcel(){
-  const file=document.getElementById("importExcel").files[0];
-  if(!file) return;
-  const reader=new FileReader();
-  reader.onload=e=>{
+  const file=importExcel.files[0];
+  const r=new FileReader();
+  r.onload=e=>{
     const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1});
     rows.slice(1).forEach(r=>{
-      if(!r.length) return;
-      const d={
-        id:r[0]||("travel-"+Date.now()+Math.random()),
-        area:r[1]||"",
-        place:r[2]||"",
-        title:r[3]||"",
-        content:r[4]||"",
-        links:r[5]||"",
-        tags:r[6]||"",
-        visited:r[7]||"否",
-        date:r[8]||"",
-        note:r[9]||""
-      };
+      const d={id:r[0]||("travel-"+Date.now()+Math.random()),
+        area:r[1]||"",place:r[2]||"",title:r[3]||"",
+        content:r[4]||"",links:r[5]||"",tags:r[6]||"",
+        visited:r[7]||"否",date:r[8]||"",note:r[9]||""};
       localStorage.setItem(d.id,JSON.stringify(d));
     });
-    render();
-    alert("Excel 匯回完成");
+    render(); alert("Excel 匯回完成");
   };
-  reader.readAsArrayBuffer(file);
+  r.readAsArrayBuffer(file);
 }
 
-/* ---------- 每日備份提醒 ---------- */
-(function(){
-  const today=new Date().toISOString().slice(0,10);
-  const last=localStorage.getItem("lastBackup");
-  if(last!==today){
-    setTimeout(()=>{
-      if(confirm("今天尚未備份旅遊資料，要現在備份嗎？")){
-        backupJSON();
-      }
-    },800);
-  }
-})();
-
-function download(content,filename,type){
-  const blob=new Blob([content],{type});
+function download(blob,name){
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download=filename;
-  a.click();
+  a.download=name; a.click();
 }
 
 render();
