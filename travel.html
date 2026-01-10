@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>旅遊資料收集簿</title>
 
+<!-- SheetJS：Excel 讀寫 -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <style>
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f5f7;padding:16px;}
 h1{text-align:center;}
@@ -17,6 +20,8 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
 .item{border-bottom:1px dashed #ddd;padding:8px 0;font-size:14px;}
 .tag{background:#e0f2f1;padding:2px 6px;border-radius:6px;margin-right:4px;font-size:12px;}
 .small{font-size:12px;color:#666;}
+.action{cursor:pointer;margin-right:8px;color:#1976d2;}
+#saveMsg{display:none;text-align:center;color:#2e7d32;font-weight:bold;margin-bottom:10px;}
 </style>
 </head>
 
@@ -24,15 +29,19 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
 
 <h1>🌍 旅遊資料收集簿</h1>
 
+<div id="saveMsg">✅ 已儲存</div>
+
 <div style="text-align:center">
-  <span class="tab active" onclick="filterTab('all')">全部</span>
-  <span class="tab" onclick="filterTab('國內')">國內</span>
-  <span class="tab" onclick="filterTab('國外')">國外</span>
-  <span class="tab" onclick="filterTab('是')">已到訪</span>
-  <span class="tab" onclick="filterTab('否')">未到訪</span>
+  <span class="tab active" onclick="setTab('all',this)">全部</span>
+  <span class="tab" onclick="setTab('國內',this)">國內</span>
+  <span class="tab" onclick="setTab('國外',this)">國外</span>
+  <span class="tab" onclick="setTab('是',this)">已到訪</span>
+  <span class="tab" onclick="setTab('否',this)">未到訪</span>
 </div>
 
 <div class="card">
+  <input type="hidden" id="editKey">
+
   <label>地區類型</label>
   <select id="area">
     <option>國內</option>
@@ -40,7 +49,7 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
   </select>
 
   <label>國家 / 縣市鄉鎮</label>
-  <input id="place" placeholder="例如：宜蘭南澳 / 日本長野">
+  <input id="place">
 
   <label>標題</label>
   <input id="title">
@@ -48,7 +57,7 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
   <label>資料內容</label>
   <textarea id="content" rows="3"></textarea>
 
-  <label>參考網址（可多個）</label>
+  <label>參考網址</label>
   <textarea id="links" rows="2"></textarea>
 
   <label>關鍵字（逗號分隔）</label>
@@ -71,7 +80,7 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
 
 <div class="card">
   <label>🔍 搜尋</label>
-  <input id="search" oninput="load()">
+  <input id="search" oninput="render()">
 </div>
 
 <div class="card">
@@ -79,18 +88,52 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
   <div id="list"></div>
 </div>
 
+<div class="card">
+  <h2>📦 匯出 / 匯回 / 備份</h2>
+  <button onclick="backupJSON()">📤 備份（JSON）</button>
+  <button onclick="exportExcel()">📊 匯出 Excel（.xlsx）</button>
+  <label style="margin-top:10px">📥 匯回 Excel（.xlsx）</label>
+  <input type="file" id="importExcel" accept=".xlsx,.xls" onchange="importExcel()">
+  <input type="file" id="restoreFile" onchange="restore()" style="margin-top:10px">
+</div>
+
 <script>
 let currentTab="all";
 
-function filterTab(tab){
-  currentTab=tab;
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  event.target.classList.add('active');
-  load();
+/* ---------- 儲存提示 ---------- */
+function showSavedMessage(){
+  const msg=document.getElementById("saveMsg");
+  msg.style.display="block";
+  setTimeout(()=>{msg.style.display="none";},2000);
 }
 
+/* ---------- 分頁 ---------- */
+function setTab(tab,el){
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+
+/* ---------- 表單 ---------- */
+function clearForm(){
+  editKey.value="";
+  area.value="國內";
+  place.value="";
+  title.value="";
+  content.value="";
+  links.value="";
+  tags.value="";
+  visited.value="否";
+  date.value="";
+  note.value="";
+}
+
+/* ---------- 儲存 / 編輯 ---------- */
 function save(){
-  const data={
+  const id = editKey.value || "travel-"+Date.now();
+  const data = {
+    id,
     area:area.value,
     place:place.value,
     title:title.value,
@@ -101,37 +144,161 @@ function save(){
     date:date.value,
     note:note.value
   };
-  localStorage.setItem("travel-"+Date.now(),JSON.stringify(data));
-  alert("已儲存");
-  load();
+  localStorage.setItem(id,JSON.stringify(data));
+  clearForm();
+  render();
+  showSavedMessage();
 }
 
-function load(){
+/* ---------- 顯示 ---------- */
+function render(){
   list.innerHTML="";
   const q=search.value||"";
   for(let k in localStorage){
-    if(k.startsWith("travel-")){
-      const d=JSON.parse(localStorage[k]);
-      if(currentTab!=="all"){
-        if(d.area!==currentTab && d.visited!==currentTab) continue;
-      }
-      if(JSON.stringify(d).includes(q)){
-        const mapLink=`https://www.google.com/maps/search/${encodeURIComponent(d.place)}`;
-        list.innerHTML+=`
-        <div class="item">
-          <strong>${d.title}</strong><br>
-          <span class="small">${d.area}｜${d.place}</span><br>
-          ${d.tags.split(",").map(t=>`<span class="tag">${t}</span>`).join("")}
-          ${d.visited==="是"?"✔ 已到訪":""}
-          <div class="small">
-            <a href="${mapLink}" target="_blank">📍 地圖</a>
-          </div>
-        </div>`;
-      }
+    if(!k.startsWith("travel-")) continue;
+    const d=JSON.parse(localStorage[k]);
+
+    if(currentTab==="國內"||currentTab==="國外"){
+      if(d.area!==currentTab) continue;
     }
+    if(currentTab==="是"||currentTab==="否"){
+      if(d.visited!==currentTab) continue;
+    }
+    if(JSON.stringify(d).indexOf(q)===-1) continue;
+
+    list.innerHTML+=`
+    <div class="item">
+      <strong>${d.title}</strong><br>
+      <span class="small">${d.area}｜${d.place}</span><br>
+      ${d.tags.split(",").filter(t=>t).map(t=>`<span class="tag">${t}</span>`).join("")}
+      ${d.visited==="是"?"✔ 已到訪":""}
+      <div class="small">
+        <span class="action" onclick="editItem('${k}')">✏️ 編輯</span>
+        <span class="action" onclick="removeItem('${k}')">🗑 刪除</span>
+        <a href="https://www.google.com/maps/search/${encodeURIComponent(d.place)}" target="_blank">📍 地圖</a>
+      </div>
+    </div>`;
   }
 }
-load();
+
+function editItem(key){
+  const d=JSON.parse(localStorage[key]);
+  editKey.value=d.id;
+  area.value=d.area;
+  place.value=d.place;
+  title.value=d.title;
+  content.value=d.content;
+  links.value=d.links;
+  tags.value=d.tags;
+  visited.value=d.visited;
+  date.value=d.date;
+  note.value=d.note;
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function removeItem(key){
+  if(confirm("確定要刪除這筆旅遊資料嗎？")){
+    localStorage.removeItem(key);
+    render();
+  }
+}
+
+/* ---------- JSON 備份 / 還原 ---------- */
+function backupJSON(){
+  const arr=[];
+  for(let k in localStorage){
+    if(k.startsWith("travel-")){
+      arr.push(JSON.parse(localStorage[k]));
+    }
+  }
+  const json="\uFEFF"+JSON.stringify(arr,null,2);
+  download(json,"travel_backup.json","application/json;charset=utf-8;");
+  localStorage.setItem("lastBackup",new Date().toISOString().slice(0,10));
+}
+
+function restore(){
+  const file=restoreFile.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const arr=JSON.parse(e.target.result);
+    arr.forEach(d=>{
+      localStorage.setItem(d.id||("travel-"+Date.now()),JSON.stringify(d));
+    });
+    render();
+    alert("還原完成");
+  };
+  reader.readAsText(file);
+}
+
+/* ---------- Excel 匯出 ---------- */
+function exportExcel(){
+  const rows=[["id","地區","地點","標題","內容","網址","關鍵字","是否到訪","到訪日期","心得"]];
+  for(let k in localStorage){
+    if(k.startsWith("travel-")){
+      const d=JSON.parse(localStorage[k]);
+      rows.push([d.id,d.area,d.place,d.title,d.content,d.links,d.tags,d.visited,d.date,d.note]);
+    }
+  }
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb,ws,"旅遊資料");
+  XLSX.writeFile(wb,"旅遊資料.xlsx");
+}
+
+/* ---------- Excel 匯回 ---------- */
+function importExcel(){
+  const file=document.getElementById("importExcel").files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+    rows.slice(1).forEach(r=>{
+      if(!r.length) return;
+      const d={
+        id:r[0]||("travel-"+Date.now()+Math.random()),
+        area:r[1]||"",
+        place:r[2]||"",
+        title:r[3]||"",
+        content:r[4]||"",
+        links:r[5]||"",
+        tags:r[6]||"",
+        visited:r[7]||"否",
+        date:r[8]||"",
+        note:r[9]||""
+      };
+      localStorage.setItem(d.id,JSON.stringify(d));
+    });
+    render();
+    alert("Excel 匯回完成");
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ---------- 每日備份提醒 ---------- */
+(function(){
+  const today=new Date().toISOString().slice(0,10);
+  const last=localStorage.getItem("lastBackup");
+  if(last!==today){
+    setTimeout(()=>{
+      if(confirm("今天尚未備份旅遊資料，要現在備份嗎？")){
+        backupJSON();
+      }
+    },800);
+  }
+})();
+
+function download(content,filename,type){
+  const blob=new Blob([content],{type});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  a.click();
+}
+
+render();
 </script>
 
 </body>
