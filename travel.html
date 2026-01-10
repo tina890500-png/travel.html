@@ -62,8 +62,8 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
   <label>是否已到訪</label>
   <select id="visited"><option>否</option><option>是</option></select>
 
-  <label>到訪日期</label>
-  <input type="date" id="date">
+  <label>到訪日期（YYYY/MM/DD 或 YYYY-MM-DD）</label>
+  <input id="date" placeholder="2023/04/03">
 
   <label>遊記心得</label>
   <textarea id="note" rows="3"></textarea>
@@ -84,6 +84,14 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
 <script>
 let currentTab="all";
 
+/* ✅ 安全解析日期（支援 YYYY/MM/DD & YYYY-MM-DD） */
+function parseDateSafe(str){
+  if(!str) return null;
+  const s = str.replace(/\//g,"-");
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
 /* 儲存提示 */
 function showSavedMessage(){
   saveMsg.style.display="block";
@@ -98,7 +106,7 @@ function setTab(tab,el){
   render();
 }
 
-/* 表單 */
+/* 清表單 */
 function clearForm(){
   editKey.value="";
   area.value="國內";
@@ -124,7 +132,7 @@ function save(){
     links:links.value,
     tags:tags.value,
     visited:visited.value,
-    date:date.value,
+    date:date.value.trim(),
     note:note.value
   };
   localStorage.setItem(id,JSON.stringify(data));
@@ -133,7 +141,7 @@ function save(){
   showSavedMessage();
 }
 
-/* 顯示（⭐ 重點在這） */
+/* 顯示＋排序 */
 function render(){
   list.innerHTML="";
   const q=search.value||"";
@@ -145,13 +153,15 @@ function render(){
     }
   }
 
-  // ⭐ 真正的「依到訪日期排序」
+  // ⭐ 正確排序邏輯
   items.sort((a,b)=>{
-    if(a.date && b.date){
-      return new Date(b.date) - new Date(a.date);
-    }
-    if(a.date) return -1;
-    if(b.date) return 1;
+    const da=parseDateSafe(a.date);
+    const db=parseDateSafe(b.date);
+
+    if(da && db) return db-da;
+    if(da) return -1;
+    if(db) return 1;
+
     return Number(b.id.split("-")[1]) - Number(a.id.split("-")[1]);
   });
 
@@ -172,40 +182,4 @@ function render(){
       <span class="small">${d.area}｜${d.place}</span><br>
       ${d.tags.split(",").filter(t=>t).map(t=>`<span class="tag">${t}</span>`).join("")}
       ${d.visited==="是"?" ✔ 已到訪":""}
-      <div class="small">
-        <span class="action" onclick="editItem('${d.id}')">✏️ 編輯</span>
-        <span class="action" onclick="removeItem('${d.id}')">🗑 刪除</span>
-        <a href="https://www.google.com/maps/search/${encodeURIComponent(d.place)}" target="_blank">📍 地圖</a>
-      </div>
-    </div>`;
-  });
-}
-
-/* 編輯 / 刪除 */
-function editItem(key){
-  const d=JSON.parse(localStorage[key]);
-  editKey.value=d.id;
-  area.value=d.area;
-  place.value=d.place;
-  title.value=d.title;
-  content.value=d.content;
-  links.value=d.links;
-  tags.value=d.tags;
-  visited.value=d.visited;
-  date.value=d.date;
-  note.value=d.note;
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-
-function removeItem(key){
-  if(confirm("確定刪除這筆旅遊資料嗎？")){
-    localStorage.removeItem(key);
-    render();
-  }
-}
-
-render();
-</script>
-
-</body>
-</html>
+      <
