@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>旅遊資料收集簿</title>
+
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f5f7;padding:16px;}
+h1{text-align:center;}
+.tab{display:inline-block;padding:6px 12px;margin:4px;border-radius:20px;background:#e0e0e0;cursor:pointer;}
+.tab.active{background:#4CAF50;color:#fff;}
+.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 2px 6px rgba(0,0,0,.08);}
+label{font-weight:bold;display:block;margin-top:10px;}
+input,select,textarea{width:100%;padding:8px;margin-top:4px;border-radius:6px;border:1px solid #ccc;}
+button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;background:#4CAF50;color:#fff;font-size:16px;}
+.item{border-bottom:1px dashed #ddd;padding:8px 0;font-size:14px;}
+.tag{background:#e0f2f1;padding:2px 6px;border-radius:6px;margin-right:4px;font-size:12px;}
+.small{font-size:12px;color:#666;}
+</style>
+</head>
+
+<body>
+
+<h1>🌍 旅遊資料收集簿</h1>
+
+<div style="text-align:center">
+  <span class="tab active" onclick="filterTab('all')">全部</span>
+  <span class="tab" onclick="filterTab('國內')">國內</span>
+  <span class="tab" onclick="filterTab('國外')">國外</span>
+  <span class="tab" onclick="filterTab('是')">已到訪</span>
+  <span class="tab" onclick="filterTab('否')">未到訪</span>
+</div>
+
+<div class="card">
+  <label>地區類型</label>
+  <select id="area">
+    <option>國內</option>
+    <option>國外</option>
+  </select>
+
+  <label>國家 / 縣市鄉鎮</label>
+  <input id="place" placeholder="例如：宜蘭南澳 / 日本長野">
+
+  <label>標題</label>
+  <input id="title">
+
+  <label>資料內容</label>
+  <textarea id="content" rows="3"></textarea>
+
+  <label>參考網址（可多個）</label>
+  <textarea id="links" rows="2"></textarea>
+
+  <label>關鍵字（逗號分隔）</label>
+  <input id="tags">
+
+  <label>是否已到訪</label>
+  <select id="visited">
+    <option>否</option>
+    <option>是</option>
+  </select>
+
+  <label>到訪日期</label>
+  <input type="date" id="date">
+
+  <label>遊記心得</label>
+  <textarea id="note" rows="3"></textarea>
+
+  <button onclick="save()">💾 儲存</button>
+</div>
+
+<div class="card">
+  <label>🔍 搜尋</label>
+  <input id="search" oninput="load()">
+</div>
+
+<div class="card">
+  <h2>📚 我的旅遊資料</h2>
+  <div id="list"></div>
+</div>
+
+<script>
+let currentTab="all";
+
+function filterTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  event.target.classList.add('active');
+  load();
+}
+
+function save(){
+  const data={
+    area:area.value,
+    place:place.value,
+    title:title.value,
+    content:content.value,
+    links:links.value,
+    tags:tags.value,
+    visited:visited.value,
+    date:date.value,
+    note:note.value
+  };
+  localStorage.setItem("travel-"+Date.now(),JSON.stringify(data));
+  alert("已儲存");
+  load();
+}
+
+function load(){
+  list.innerHTML="";
+  const q=search.value||"";
+  for(let k in localStorage){
+    if(k.startsWith("travel-")){
+      const d=JSON.parse(localStorage[k]);
+      if(currentTab!=="all"){
+        if(d.area!==currentTab && d.visited!==currentTab) continue;
+      }
+      if(JSON.stringify(d).includes(q)){
+        const mapLink=`https://www.google.com/maps/search/${encodeURIComponent(d.place)}`;
+        list.innerHTML+=`
+        <div class="item">
+          <strong>${d.title}</strong><br>
+          <span class="small">${d.area}｜${d.place}</span><br>
+          ${d.tags.split(",").map(t=>`<span class="tag">${t}</span>`).join("")}
+          ${d.visited==="是"?"✔ 已到訪":""}
+          <div class="small">
+            <a href="${mapLink}" target="_blank">📍 地圖</a>
+          </div>
+        </div>`;
+      }
+    }
+  }
+}
+load();
+</script>
+
+</body>
+</html>
