@@ -16,11 +16,12 @@ h1{text-align:center;}
 label{font-weight:bold;display:block;margin-top:10px;}
 input,select,textarea{width:100%;padding:8px;margin-top:4px;border-radius:6px;border:1px solid #ccc;}
 button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;background:#4CAF50;color:#fff;font-size:16px;}
-.item{border-bottom:1px dashed #ddd;padding:10px 0;font-size:14px;}
+.item{border-bottom:1px dashed #ddd;padding:12px 0;font-size:14px;}
 .tag{background:#e0f2f1;padding:2px 6px;border-radius:6px;margin-right:4px;font-size:12px;}
-.small{font-size:12px;color:#666;}
+.small{font-size:12px;color:#555;}
 .action{cursor:pointer;margin-right:8px;color:#1976d2;}
 #saveMsg{display:none;text-align:center;color:#2e7d32;font-weight:bold;margin-bottom:10px;}
+.date{font-size:12px;color:#444;margin-left:6px;}
 </style>
 </head>
 
@@ -80,13 +81,6 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
   <div id="list"></div>
 </div>
 
-<div class="card">
-  <h2>📦 匯出 / 匯回</h2>
-  <button onclick="backupJSON()">📤 備份 JSON</button>
-  <button onclick="exportExcel()">📊 匯出 Excel</button>
-  <input type="file" id="importExcel" accept=".xlsx" onchange="importExcel()">
-</div>
-
 <script>
 let currentTab="all";
 
@@ -118,16 +112,28 @@ function clearForm(){
   note.value="";
 }
 
+/* 儲存 */
 function save(){
   const id=editKey.value||("travel-"+Date.now());
-  const data={id,area:area.value,place:place.value,title:title.value,
-    content:content.value,links:links.value,tags:tags.value,
-    visited:visited.value,date:date.value,note:note.value};
+  const data={
+    id,
+    area:area.value,
+    place:place.value,
+    title:title.value,
+    content:content.value,
+    links:links.value,
+    tags:tags.value,
+    visited:visited.value,
+    date:date.value,
+    note:note.value
+  };
   localStorage.setItem(id,JSON.stringify(data));
-  clearForm(); render(); showSavedMessage();
+  clearForm();
+  render();
+  showSavedMessage();
 }
 
-/* 顯示（重點：排序） */
+/* 顯示（⭐ 重點在這） */
 function render(){
   list.innerHTML="";
   const q=search.value||"";
@@ -135,16 +141,18 @@ function render(){
 
   for(let k in localStorage){
     if(k.startsWith("travel-")){
-      const d=JSON.parse(localStorage[k]);
-      items.push(d);
+      items.push(JSON.parse(localStorage[k]));
     }
   }
 
-  // ⭐ 排序邏輯（新 → 舊）
+  // ⭐ 真正的「依到訪日期排序」
   items.sort((a,b)=>{
-    const da = a.date ? new Date(a.date) : new Date(Number(a.id.split("-")[1]));
-    const db = b.date ? new Date(b.date) : new Date(Number(b.id.split("-")[1]));
-    return db - da;
+    if(a.date && b.date){
+      return new Date(b.date) - new Date(a.date);
+    }
+    if(a.date) return -1;
+    if(b.date) return 1;
+    return Number(b.id.split("-")[1]) - Number(a.id.split("-")[1]);
   });
 
   items.forEach(d=>{
@@ -158,10 +166,12 @@ function render(){
 
     list.innerHTML+=`
     <div class="item">
-      <strong>${d.title}</strong><br>
-      <span class="small">${d.area}｜${d.place}${d.date?"｜"+d.date:""}</span><br>
+      <strong>${d.title}</strong>
+      ${d.date?`<span class="date">📅 ${d.date}</span>`:""}
+      <br>
+      <span class="small">${d.area}｜${d.place}</span><br>
       ${d.tags.split(",").filter(t=>t).map(t=>`<span class="tag">${t}</span>`).join("")}
-      ${d.visited==="是"?"✔ 已到訪":""}
+      ${d.visited==="是"?" ✔ 已到訪":""}
       <div class="small">
         <span class="action" onclick="editItem('${d.id}')">✏️ 編輯</span>
         <span class="action" onclick="removeItem('${d.id}')">🗑 刪除</span>
@@ -171,67 +181,27 @@ function render(){
   });
 }
 
+/* 編輯 / 刪除 */
 function editItem(key){
   const d=JSON.parse(localStorage[key]);
   editKey.value=d.id;
-  area.value=d.area; place.value=d.place; title.value=d.title;
-  content.value=d.content; links.value=d.links;
-  tags.value=d.tags; visited.value=d.visited;
-  date.value=d.date; note.value=d.note;
+  area.value=d.area;
+  place.value=d.place;
+  title.value=d.title;
+  content.value=d.content;
+  links.value=d.links;
+  tags.value=d.tags;
+  visited.value=d.visited;
+  date.value=d.date;
+  note.value=d.note;
   window.scrollTo({top:0,behavior:"smooth"});
 }
 
 function removeItem(key){
-  if(confirm("確定刪除？")){
-    localStorage.removeItem(key); render();
+  if(confirm("確定刪除這筆旅遊資料嗎？")){
+    localStorage.removeItem(key);
+    render();
   }
-}
-
-/* 匯出 / 匯回（保持原邏輯） */
-function backupJSON(){
-  const arr=[];
-  for(let k in localStorage){
-    if(k.startsWith("travel-")) arr.push(JSON.parse(localStorage[k]));
-  }
-  const blob=new Blob(["\uFEFF"+JSON.stringify(arr,null,2)],{type:"application/json"});
-  download(blob,"travel_backup.json");
-}
-
-function exportExcel(){
-  const rows=[["id","地區","地點","標題","內容","網址","關鍵字","是否到訪","到訪日期","心得"]];
-  for(let k in localStorage){
-    if(k.startsWith("travel-")){
-      const d=JSON.parse(localStorage[k]);
-      rows.push([d.id,d.area,d.place,d.title,d.content,d.links,d.tags,d.visited,d.date,d.note]);
-    }
-  }
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),"旅遊資料");
-  XLSX.writeFile(wb,"旅遊資料.xlsx");
-}
-
-function importExcel(){
-  const file=importExcel.files[0];
-  const r=new FileReader();
-  r.onload=e=>{
-    const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1});
-    rows.slice(1).forEach(r=>{
-      const d={id:r[0]||("travel-"+Date.now()+Math.random()),
-        area:r[1]||"",place:r[2]||"",title:r[3]||"",
-        content:r[4]||"",links:r[5]||"",tags:r[6]||"",
-        visited:r[7]||"否",date:r[8]||"",note:r[9]||""};
-      localStorage.setItem(d.id,JSON.stringify(d));
-    });
-    render(); alert("Excel 匯回完成");
-  };
-  r.readAsArrayBuffer(file);
-}
-
-function download(blob,name){
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download=name; a.click();
 }
 
 render();
