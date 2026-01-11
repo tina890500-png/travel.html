@@ -2,47 +2,73 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>旅遊資料收集簿</title>
-
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f5f7;padding:16px;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:#f5f7fa;
+  padding:20px;
+}
 h1{text-align:center;}
-.tab{display:inline-block;padding:6px 12px;margin:4px;border-radius:20px;background:#e0e0e0;cursor:pointer;}
-.tab.active{background:#4CAF50;color:#fff;}
-.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 2px 6px rgba(0,0,0,.08);}
+.card{
+  background:#fff;
+  padding:16px;
+  border-radius:14px;
+  margin-bottom:18px;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+.tabs{text-align:center;margin-bottom:12px;}
+.tab{
+  display:inline-block;
+  padding:6px 14px;
+  margin:4px;
+  border-radius:20px;
+  background:#e0e0e0;
+  cursor:pointer;
+}
+.tab.active{background:#4caf50;color:#fff;}
 label{font-weight:bold;display:block;margin-top:10px;}
-input,select,textarea{width:100%;padding:8px;margin-top:4px;border-radius:6px;border:1px solid #ccc;}
-button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;background:#4CAF50;color:#fff;font-size:16px;}
-.item{border-bottom:1px dashed #ddd;padding:12px 0;font-size:14px;}
-.tag{background:#e0f2f1;padding:2px 6px;border-radius:6px;margin-right:4px;font-size:12px;}
-.small{font-size:12px;color:#555;}
-.action{cursor:pointer;margin-right:8px;color:#1976d2;}
-#saveMsg{display:none;text-align:center;color:#2e7d32;font-weight:bold;margin-bottom:10px;}
-.date{font-size:12px;color:#444;margin-left:6px;}
+input,textarea,select{
+  width:100%;padding:8px;margin-top:4px;
+  border-radius:6px;border:1px solid #ccc;
+}
+button{
+  width:100%;padding:12px;margin-top:14px;
+  background:#4caf50;color:#fff;
+  border:none;border-radius:10px;font-size:16px;
+}
+button.secondary{background:#607d8b;}
+.item{
+  border-bottom:1px dashed #ddd;
+  padding:10px 0;
+}
+.badge{font-size:12px;color:#666;}
+.date{color:#2e7d32;font-weight:bold;}
+.actions{font-size:13px;margin-top:6px;}
+.actions span{cursor:pointer;margin-right:10px;color:#d32f2f;}
 </style>
 </head>
 
 <body>
 
 <h1>🌍 旅遊資料收集簿</h1>
-<div id="saveMsg">✅ 已儲存</div>
 
-<div style="text-align:center">
-  <span class="tab active" onclick="setTab('all',this)">全部</span>
-  <span class="tab" onclick="setTab('國內',this)">國內</span>
-  <span class="tab" onclick="setTab('國外',this)">國外</span>
-  <span class="tab" onclick="setTab('是',this)">已到訪</span>
-  <span class="tab" onclick="setTab('否',this)">未到訪</span>
+<div class="tabs">
+  <span class="tab active" onclick="setTab('all')">全部</span>
+  <span class="tab" onclick="setTab('domestic')">國內</span>
+  <span class="tab" onclick="setTab('foreign')">國外</span>
+  <span class="tab" onclick="setTab('visited')">已到訪</span>
+  <span class="tab" onclick="setTab('unvisited')">未到訪</span>
 </div>
 
 <div class="card">
-  <input type="hidden" id="editKey">
-
   <label>地區類型</label>
-  <select id="area"><option>國內</option><option>國外</option></select>
+  <select id="area">
+    <option>國內</option>
+    <option>國外</option>
+  </select>
 
   <label>國家 / 縣市鄉鎮</label>
   <input id="place">
@@ -51,29 +77,26 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
   <input id="title">
 
   <label>資料內容</label>
-  <textarea id="content" rows="3"></textarea>
+  <textarea id="content"></textarea>
 
   <label>參考網址</label>
-  <textarea id="links" rows="2"></textarea>
-
-  <label>關鍵字（逗號分隔）</label>
-  <input id="tags">
+  <textarea id="links"></textarea>
 
   <label>是否已到訪</label>
-  <select id="visited"><option>否</option><option>是</option></select>
+  <select id="visited">
+    <option value="否">否</option>
+    <option value="是">是</option>
+  </select>
 
-  <label>到訪日期（YYYY/MM/DD 或 YYYY-MM-DD）</label>
-  <input id="date" placeholder="2023/04/03">
-
-  <label>遊記心得</label>
-  <textarea id="note" rows="3"></textarea>
+  <label>到訪日期</label>
+  <input type="date" id="date">
 
   <button onclick="save()">💾 儲存</button>
 </div>
 
 <div class="card">
-  <label>🔍 搜尋</label>
-  <input id="search" oninput="render()">
+  <button class="secondary" onclick="exportExcel()">📤 匯出 Excel</button>
+  <input type="file" id="importFile" accept=".csv" onchange="importExcel()" style="margin-top:10px;">
 </div>
 
 <div class="card">
@@ -84,45 +107,15 @@ button{margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;bac
 <script>
 let currentTab="all";
 
-/* ✅ 安全解析日期（支援 YYYY/MM/DD & YYYY-MM-DD） */
-function parseDateSafe(str){
-  if(!str) return null;
-  const s = str.replace(/\//g,"-");
-  const d = new Date(s);
-  return isNaN(d) ? null : d;
-}
-
-/* 儲存提示 */
-function showSavedMessage(){
-  saveMsg.style.display="block";
-  setTimeout(()=>saveMsg.style.display="none",2000);
-}
-
-/* 分頁 */
-function setTab(tab,el){
+function setTab(tab){
   currentTab=tab;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
+  event.target.classList.add('active');
   render();
 }
 
-/* 清表單 */
-function clearForm(){
-  editKey.value="";
-  area.value="國內";
-  place.value="";
-  title.value="";
-  content.value="";
-  links.value="";
-  tags.value="";
-  visited.value="否";
-  date.value="";
-  note.value="";
-}
-
-/* 儲存 */
 function save(){
-  const id=editKey.value||("travel-"+Date.now());
+  const id="travel-"+Date.now();
   const data={
     id,
     area:area.value,
@@ -130,56 +123,99 @@ function save(){
     title:title.value,
     content:content.value,
     links:links.value,
-    tags:tags.value,
     visited:visited.value,
-    date:date.value.trim(),
-    note:note.value
+    date:date.value
   };
   localStorage.setItem(id,JSON.stringify(data));
-  clearForm();
   render();
-  showSavedMessage();
 }
 
-/* 顯示＋排序 */
 function render(){
   list.innerHTML="";
-  const q=search.value||"";
-  const items=[];
-
+  let items=[];
   for(let k in localStorage){
     if(k.startsWith("travel-")){
       items.push(JSON.parse(localStorage[k]));
     }
   }
 
-  // ⭐ 正確排序邏輯
+  items=items.filter(d=>{
+    if(currentTab==="domestic") return d.area==="國內";
+    if(currentTab==="foreign") return d.area==="國外";
+    if(currentTab==="visited") return d.visited==="是";
+    if(currentTab==="unvisited") return d.visited==="否";
+    return true;
+  });
+
   items.sort((a,b)=>{
-    const da=parseDateSafe(a.date);
-    const db=parseDateSafe(b.date);
-
-    if(da && db) return db-da;
-    if(da) return -1;
-    if(db) return 1;
-
-    return Number(b.id.split("-")[1]) - Number(a.id.split("-")[1]);
+    if(a.visited==="是" && b.visited==="是"){
+      return new Date(b.date)-new Date(a.date);
+    }
+    if(a.visited==="是") return -1;
+    if(b.visited==="是") return 1;
+    return 0;
   });
 
   items.forEach(d=>{
-    if(currentTab==="國內"||currentTab==="國外"){
-      if(d.area!==currentTab) return;
-    }
-    if(currentTab==="是"||currentTab==="否"){
-      if(d.visited!==currentTab) return;
-    }
-    if(JSON.stringify(d).indexOf(q)===-1) return;
-
     list.innerHTML+=`
     <div class="item">
-      <strong>${d.title}</strong>
-      ${d.date?`<span class="date">📅 ${d.date}</span>`:""}
-      <br>
-      <span class="small">${d.area}｜${d.place}</span><br>
-      ${d.tags.split(",").filter(t=>t).map(t=>`<span class="tag">${t}</span>`).join("")}
-      ${d.visited==="是"?" ✔ 已到訪":""}
-      <
+      <b>${d.title}</b><br>
+      <span class="badge">${d.area}｜${d.place}</span><br>
+      ${d.visited==="是" ? `<span class="date">✔ 到訪：${d.date}</span><br>` : ""}
+      ${d.content || ""}<br>
+      ${d.links ? `<a href="${d.links}" target="_blank">🔗 連結</a>`:""}
+      <div class="actions">
+        <span onclick="remove('${d.id}')">🗑 刪除</span>
+      </div>
+    </div>`;
+  });
+}
+
+function remove(id){
+  if(confirm("確定刪除？")){
+    localStorage.removeItem(id);
+    render();
+  }
+}
+
+function exportExcel(){
+  let rows=["area,place,title,content,links,visited,date"];
+  for(let k in localStorage){
+    if(k.startsWith("travel-")){
+      const d=JSON.parse(localStorage[k]);
+      rows.push([d.area,d.place,d.title,d.content,d.links,d.visited,d.date].map(v=>`"${v||""}"`).join(","));
+    }
+  }
+  const blob=new Blob([rows.join("\n")],{type:"text/csv;charset=utf-8;"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="travel_backup.csv";
+  a.click();
+}
+
+function importExcel(){
+  const file=importFile.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const lines=e.target.result.split("\n").slice(1);
+    lines.forEach(l=>{
+      if(!l.trim())return;
+      const c=l.split('","').map(s=>s.replace(/"/g,""));
+      const id="travel-"+Date.now()+Math.random();
+      localStorage.setItem(id,JSON.stringify({
+        id,
+        area:c[0],place:c[1],title:c[2],content:c[3],
+        links:c[4],visited:c[5],date:c[6]
+      }));
+    });
+    render();
+  };
+  reader.readAsText(file,"utf-8");
+}
+
+render();
+</script>
+
+</body>
+</html>
