@@ -53,12 +53,13 @@ button.secondary{background:#607d8b;}
 .badge{font-size:12px;color:#666;}
 .date{color:#2e7d32;font-weight:bold;}
 .actions{font-size:13px;margin-top:6px;}
-.actions span{
-  cursor:pointer;
-  margin-right:12px;
-}
+.actions span{cursor:pointer;margin-right:12px;}
 .edit{color:#1976d2;}
 .delete{color:#d32f2f;}
+.links a{
+  margin-right:10px;
+  font-size:13px;
+}
 .editing{
   background:#fffde7;
   border:2px solid #fbc02d;
@@ -94,8 +95,8 @@ button.secondary{background:#607d8b;}
   <label>資料內容</label>
   <textarea id="content"></textarea>
 
-  <label>參考網址</label>
-  <textarea id="links"></textarea>
+  <label>參考網址（可多行）</label>
+  <textarea id="links" placeholder="一行一個網址"></textarea>
 
   <label>是否已到訪</label>
   <select id="visited">
@@ -135,7 +136,16 @@ function formatDate(d){
   return d ? d.replaceAll("-","/") : "";
 }
 
-/* 儲存（新增 / 編輯共用） */
+/* 將多網址轉成連結 */
+function renderLinks(text){
+  if(!text) return "";
+  const urls = text.split(/\s+/).filter(Boolean);
+  return `<div class="links">` + urls.map((u,i)=>
+    `<a href="${u}" target="_blank">🔗 連結${i+1}</a>`
+  ).join("") + `</div>`;
+}
+
+/* 儲存（新增 / 編輯） */
 function save(){
   const id = editingId || ("travel-"+Date.now());
   const data={
@@ -149,7 +159,6 @@ function save(){
     date:date.value
   };
   localStorage.setItem(id,JSON.stringify(data));
-
   clearForm();
   render();
 }
@@ -166,10 +175,8 @@ function clearForm(){
   date.value="";
 }
 
-/* 載入編輯 */
 function editItem(id){
   const d=JSON.parse(localStorage.getItem(id));
-  if(!d)return;
   editingId=id;
   formCard.classList.add("editing");
   area.value=d.area;
@@ -182,7 +189,6 @@ function editItem(id){
   window.scrollTo({top:0,behavior:"smooth"});
 }
 
-/* 刪除 */
 function removeItem(id){
   if(confirm("確定刪除？")){
     localStorage.removeItem(id);
@@ -226,62 +232,7 @@ function render(){
         ? `<span class="date">✔ 已到訪：${formatDate(d.date)}</span><br>`
         : ""
       }
-      ${d.content||""}<br>
-      ${d.links ? `<a href="${d.links}" target="_blank">🔗 連結</a>` : ""}
+      ${d.content||""}
+      ${renderLinks(d.links)}
       <div class="actions">
-        <span class="edit" onclick="editItem('${d.id}')">✏️ 編輯</span>
-        <span class="delete" onclick="removeItem('${d.id}')">🗑 刪除</span>
-      </div>
-    </div>`;
-  });
-}
-
-/* 匯出 Excel（CSV） */
-function exportCSV(){
-  let rows=[["area","place","title","content","links","visited","date"]];
-  for(let k in localStorage){
-    if(k.startsWith("travel-")){
-      const d=JSON.parse(localStorage[k]);
-      rows.push([d.area,d.place,d.title,d.content,d.links,d.visited,d.date]);
-    }
-  }
-  const csv = rows.map(r =>
-    r.map(v => `"${(v||"").replace(/"/g,'""')}"`).join(",")
-  ).join("\n");
-
-  const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="travel_backup.csv";
-  a.click();
-}
-
-/* 匯入 Excel（CSV） */
-function importCSV(){
-  const file=importFile.files[0];
-  if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const lines=e.target.result.split("\n").slice(1);
-    lines.forEach(l=>{
-      if(!l.trim())return;
-      const c=l.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)
-        .map(s=>s.replace(/^"|"$/g,"").replace(/""/g,'"'));
-      const id="travel-"+Date.now()+Math.random();
-      localStorage.setItem(id,JSON.stringify({
-        id,
-        area:c[0],place:c[1],title:c[2],
-        content:c[3],links:c[4],
-        visited:c[5],date:c[6]
-      }));
-    });
-    render();
-  };
-  reader.readAsText(file,"utf-8");
-}
-
-render();
-</script>
-
-</body>
-</html>
+        <span c
