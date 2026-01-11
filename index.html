@@ -31,11 +31,8 @@ h1{text-align:center;}
 .tab.active{background:#4caf50;color:#fff;}
 label{font-weight:bold;display:block;margin-top:10px;}
 input,textarea,select{
-  width:100%;
-  padding:8px;
-  margin-top:4px;
-  border-radius:6px;
-  border:1px solid #ccc;
+  width:100%;padding:8px;margin-top:4px;
+  border-radius:6px;border:1px solid #ccc;
 }
 button{
   width:100%;
@@ -54,18 +51,17 @@ button.secondary{background:#607d8b;}
   padding:10px 0;
 }
 .badge{font-size:12px;color:#666;}
-.date{
-  color:#2e7d32;
-  font-weight:bold;
-}
-.actions{
-  font-size:13px;
-  margin-top:6px;
-}
+.date{color:#2e7d32;font-weight:bold;}
+.actions{font-size:13px;margin-top:6px;}
 .actions span{
   cursor:pointer;
-  margin-right:10px;
-  color:#d32f2f;
+  margin-right:12px;
+}
+.edit{color:#1976d2;}
+.delete{color:#d32f2f;}
+.editing{
+  background:#fffde7;
+  border:2px solid #fbc02d;
 }
 </style>
 </head>
@@ -82,7 +78,7 @@ button.secondary{background:#607d8b;}
   <span class="tab" onclick="setTab('unvisited',this)">未到訪</span>
 </div>
 
-<div class="card">
+<div class="card" id="formCard">
   <label>地區類型</label>
   <select id="area">
     <option>國內</option>
@@ -126,6 +122,7 @@ button.secondary{background:#607d8b;}
 
 <script>
 let currentTab="all";
+let editingId=null;
 
 function setTab(tab,el){
   currentTab=tab;
@@ -134,13 +131,13 @@ function setTab(tab,el){
   render();
 }
 
-/* yyyy-mm-dd → yyyy/mm/dd */
 function formatDate(d){
   return d ? d.replaceAll("-","/") : "";
 }
 
+/* 儲存（新增 / 編輯共用） */
 function save(){
-  const id="travel-"+Date.now();
+  const id = editingId || ("travel-"+Date.now());
   const data={
     id,
     area:area.value,
@@ -153,7 +150,13 @@ function save(){
   };
   localStorage.setItem(id,JSON.stringify(data));
 
-  // 清空欄位
+  clearForm();
+  render();
+}
+
+function clearForm(){
+  editingId=null;
+  formCard.classList.remove("editing");
   area.value="國內";
   place.value="";
   title.value="";
@@ -161,8 +164,30 @@ function save(){
   links.value="";
   visited.value="否";
   date.value="";
+}
 
-  render();
+/* 載入編輯 */
+function editItem(id){
+  const d=JSON.parse(localStorage.getItem(id));
+  if(!d)return;
+  editingId=id;
+  formCard.classList.add("editing");
+  area.value=d.area;
+  place.value=d.place;
+  title.value=d.title;
+  content.value=d.content;
+  links.value=d.links;
+  visited.value=d.visited;
+  date.value=d.date;
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+/* 刪除 */
+function removeItem(id){
+  if(confirm("確定刪除？")){
+    localStorage.removeItem(id);
+    render();
+  }
 }
 
 function render(){
@@ -174,7 +199,6 @@ function render(){
     }
   }
 
-  // 頁籤過濾
   items = items.filter(d=>{
     if(currentTab==="domestic") return d.area==="國內";
     if(currentTab==="foreign") return d.area==="國外";
@@ -183,10 +207,9 @@ function render(){
     return true;
   });
 
-  // ⭐ 排序核心邏輯
   items.sort((a,b)=>{
     if(a.visited==="是" && b.visited==="是"){
-      return new Date(b.date) - new Date(a.date); // 最新在前
+      return new Date(b.date)-new Date(a.date);
     }
     if(a.visited==="是") return -1;
     if(b.visited==="是") return 1;
@@ -194,7 +217,7 @@ function render(){
   });
 
   items.forEach(d=>{
-    list.innerHTML += `
+    list.innerHTML+=`
     <div class="item">
       <b>${d.title||""}</b><br>
       <span class="badge">${d.area}｜${d.place}</span><br>
@@ -206,40 +229,27 @@ function render(){
       ${d.content||""}<br>
       ${d.links ? `<a href="${d.links}" target="_blank">🔗 連結</a>` : ""}
       <div class="actions">
-        <span onclick="removeItem('${d.id}')">🗑 刪除</span>
+        <span class="edit" onclick="editItem('${d.id}')">✏️ 編輯</span>
+        <span class="delete" onclick="removeItem('${d.id}')">🗑 刪除</span>
       </div>
     </div>`;
   });
 }
 
-function removeItem(id){
-  if(confirm("確定刪除？")){
-    localStorage.removeItem(id);
-    render();
-  }
-}
-
-/* 匯出 Excel（CSV，UTF-8 不亂碼） */
+/* 匯出 Excel（CSV） */
 function exportCSV(){
   let rows=[["area","place","title","content","links","visited","date"]];
   for(let k in localStorage){
     if(k.startsWith("travel-")){
       const d=JSON.parse(localStorage[k]);
-      rows.push([
-        d.area,d.place,d.title,d.content,d.links,d.visited,d.date
-      ]);
+      rows.push([d.area,d.place,d.title,d.content,d.links,d.visited,d.date]);
     }
   }
-
   const csv = rows.map(r =>
     r.map(v => `"${(v||"").replace(/"/g,'""')}"`).join(",")
   ).join("\n");
 
-  const blob=new Blob(
-    ["\ufeff"+csv],
-    {type:"text/csv;charset=utf-8;"}
-  );
-
+  const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
   a.download="travel_backup.csv";
@@ -260,13 +270,9 @@ function importCSV(){
       const id="travel-"+Date.now()+Math.random();
       localStorage.setItem(id,JSON.stringify({
         id,
-        area:c[0],
-        place:c[1],
-        title:c[2],
-        content:c[3],
-        links:c[4],
-        visited:c[5],
-        date:c[6]
+        area:c[0],place:c[1],title:c[2],
+        content:c[3],links:c[4],
+        visited:c[5],date:c[6]
       }));
     });
     render();
