@@ -38,6 +38,7 @@ button{
   width:100%;padding:12px;margin-top:14px;
   background:#4caf50;color:#fff;
   border:none;border-radius:10px;font-size:16px;
+  cursor:pointer;
 }
 button.secondary{background:#607d8b;}
 .item{
@@ -56,11 +57,11 @@ button.secondary{background:#607d8b;}
 <h1>🌍 旅遊資料收集簿</h1>
 
 <div class="tabs">
-  <span class="tab active" onclick="setTab('all')">全部</span>
-  <span class="tab" onclick="setTab('domestic')">國內</span>
-  <span class="tab" onclick="setTab('foreign')">國外</span>
-  <span class="tab" onclick="setTab('visited')">已到訪</span>
-  <span class="tab" onclick="setTab('unvisited')">未到訪</span>
+  <span class="tab active" onclick="setTab('all',this)">全部</span>
+  <span class="tab" onclick="setTab('domestic',this)">國內</span>
+  <span class="tab" onclick="setTab('foreign',this)">國外</span>
+  <span class="tab" onclick="setTab('visited',this)">已到訪</span>
+  <span class="tab" onclick="setTab('unvisited',this)">未到訪</span>
 </div>
 
 <div class="card">
@@ -95,8 +96,9 @@ button.secondary{background:#607d8b;}
 </div>
 
 <div class="card">
-  <button class="secondary" onclick="exportExcel()">📤 匯出 Excel</button>
-  <input type="file" id="importFile" accept=".csv" onchange="importExcel()" style="margin-top:10px;">
+  <button class="secondary" onclick="exportCSV()">📤 匯出 Excel（CSV）</button>
+  <button class="secondary" onclick="document.getElementById('importFile').click()">📥 匯入 Excel（CSV）</button>
+  <input type="file" id="importFile" accept=".csv" style="display:none" onchange="importCSV()">
 </div>
 
 <div class="card">
@@ -107,10 +109,10 @@ button.secondary{background:#607d8b;}
 <script>
 let currentTab="all";
 
-function setTab(tab){
+function setTab(tab,el){
   currentTab=tab;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  event.target.classList.add('active');
+  el.classList.add('active');
   render();
 }
 
@@ -127,6 +129,16 @@ function save(){
     date:date.value
   };
   localStorage.setItem(id,JSON.stringify(data));
+
+  // 🔹 清空欄位
+  area.value="國內";
+  place.value="";
+  title.value="";
+  content.value="";
+  links.value="";
+  visited.value="否";
+  date.value="";
+
   render();
 }
 
@@ -159,41 +171,56 @@ function render(){
   items.forEach(d=>{
     list.innerHTML+=`
     <div class="item">
-      <b>${d.title}</b><br>
+      <b>${d.title||""}</b><br>
       <span class="badge">${d.area}｜${d.place}</span><br>
-      ${d.visited==="是" ? `<span class="date">✔ 到訪：${d.date}</span><br>` : ""}
-      ${d.content || ""}<br>
+      ${d.visited==="是" && d.date ? `<span class="date">✔ 到訪：${d.date.replaceAll("-","/")}</span><br>`:""}
+      ${d.content||""}<br>
       ${d.links ? `<a href="${d.links}" target="_blank">🔗 連結</a>`:""}
       <div class="actions">
-        <span onclick="remove('${d.id}')">🗑 刪除</span>
+        <span onclick="removeItem('${d.id}')">🗑 刪除</span>
       </div>
     </div>`;
   });
 }
 
-function remove(id){
+function removeItem(id){
   if(confirm("確定刪除？")){
     localStorage.removeItem(id);
     render();
   }
 }
 
-function exportExcel(){
-  let rows=["area,place,title,content,links,visited,date"];
+/* 📤 匯出 Excel（UTF-8 不亂碼） */
+function exportCSV(){
+  let rows=[
+    ["area","place","title","content","links","visited","date"]
+  ];
   for(let k in localStorage){
     if(k.startsWith("travel-")){
       const d=JSON.parse(localStorage[k]);
-      rows.push([d.area,d.place,d.title,d.content,d.links,d.visited,d.date].map(v=>`"${v||""}"`).join(","));
+      rows.push([
+        d.area,d.place,d.title,d.content,d.links,d.visited,d.date
+      ]);
     }
   }
-  const blob=new Blob([rows.join("\n")],{type:"text/csv;charset=utf-8;"});
+
+  const csv = rows.map(r =>
+    r.map(v => `"${(v||"").replace(/"/g,'""')}"`).join(",")
+  ).join("\n");
+
+  const blob=new Blob(
+    ["\ufeff"+csv],
+    {type:"text/csv;charset=utf-8;"}
+  );
+
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
   a.download="travel_backup.csv";
   a.click();
 }
 
-function importExcel(){
+/* 📥 匯入 Excel（CSV） */
+function importCSV(){
   const file=importFile.files[0];
   if(!file)return;
   const reader=new FileReader();
@@ -201,21 +228,4 @@ function importExcel(){
     const lines=e.target.result.split("\n").slice(1);
     lines.forEach(l=>{
       if(!l.trim())return;
-      const c=l.split('","').map(s=>s.replace(/"/g,""));
-      const id="travel-"+Date.now()+Math.random();
-      localStorage.setItem(id,JSON.stringify({
-        id,
-        area:c[0],place:c[1],title:c[2],content:c[3],
-        links:c[4],visited:c[5],date:c[6]
-      }));
-    });
-    render();
-  };
-  reader.readAsText(file,"utf-8");
-}
-
-render();
-</script>
-
-</body>
-</html>
+      const c=l.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)
