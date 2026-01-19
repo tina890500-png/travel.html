@@ -5,7 +5,6 @@
 <title>📍 我的旅遊資料庫</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- Excel -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -65,6 +64,7 @@ input,select,textarea{
   <button onclick="setTab('unvisited')">未訪</button>
 </div>
 
+<!-- 新增 / 編輯表單 -->
 <div class="card">
   <label>國內 / 國外</label>
   <select id="region">
@@ -85,28 +85,23 @@ input,select,textarea{
   <textarea id="note" rows="3"></textarea>
 
   <label>參考網址（每行一個）</label>
-  <textarea id="links" rows="2" placeholder="https://..."></textarea>
+  <textarea id="links" rows="2"></textarea>
 
   <button onclick="save()">💾 儲存</button>
 </div>
 
-<div class="card">
-  <input type="file" id="excel">
-  <button onclick="importExcel()">📤 匯入</button>
-  <button onclick="exportExcel()">📥 匯出</button>
-</div>
-
+<!-- 清單 -->
 <div id="list"></div>
 <div id="toast"></div>
 
 <script type="module">
-/* ===== Firebase CDN ===== */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc,
-  onSnapshot, deleteDoc, doc, updateDoc, getDocs
+  onSnapshot, deleteDoc, doc, updateDoc
 } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
+/* Firebase 設定（你的） */
 const firebaseConfig = {
   apiKey: "AIzaSyClxWYydZU6HkXO86nK4cA36Rz0MyhjSYw",
   authDomain: "travel-plan-8e011.firebaseapp.com",
@@ -120,45 +115,41 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const colRef = collection(db,"trips");
 
-/* ===== 狀態 ===== */
-let allData=[];
-let currentTab="all";
-let editId=null;
+let allData = [];
+let currentTab = "all";
+let editId = null;
 
-/* ===== 頁籤 ===== */
-window.setTab=t=>{currentTab=t;render();};
+window.setTab = t => { currentTab = t; render(); };
 
-/* ===== 即時同步（新增 / 編輯 / 刪除 都會立刻反映） ===== */
-onSnapshot(colRef,snap=>{
-  allData=snap.docs.map(d=>({id:d.id,...d.data()}));
+/* 🔥 唯一資料來源：onSnapshot */
+onSnapshot(colRef, snap => {
+  allData = snap.docs.map(d => ({ id:d.id, ...d.data() }));
   render();
 });
 
-/* ===== 顯示資料 ===== */
+/* 顯示清單 */
 function render(){
-  const list=document.getElementById("list");
-  list.innerHTML="";
+  const list = document.getElementById("list");
+  list.innerHTML = "";
 
-  let data=allData.filter(d=>{
-    if(currentTab==="domestic")return d.region==="國內";
-    if(currentTab==="foreign")return d.region==="國外";
-    if(currentTab==="visited")return d.date;
-    if(currentTab==="unvisited")return !d.date;
+  let data = allData.filter(d=>{
+    if(currentTab==="domestic") return d.region==="國內";
+    if(currentTab==="foreign") return d.region==="國外";
+    if(currentTab==="visited") return d.date;
+    if(currentTab==="unvisited") return !d.date;
     return true;
   }).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
 
   data.forEach(d=>{
-    const linkHtml=(d.links||[]).map((l,i)=>
+    const linkHtml = (d.links||[]).map((l,i)=>
       `<a href="${l}" target="_blank">連結${i+1}</a>`
     ).join("");
 
-    list.innerHTML+=`
+    list.innerHTML += `
       <div class="card">
         <h3>${d.title}</h3>
         <div class="meta">${d.region}｜${d.location}</div>
-        <div class="date">
-          ${d.date ? `✔ 已訪：${d.date}` : "⏳ 未訪"}
-        </div>
+        <div class="date">${d.date ? "✔ 已訪："+d.date : "⏳ 未訪"}</div>
         <div class="note">${d.note||""}</div>
         <div class="links">${linkHtml}</div>
         <div class="actions">
@@ -169,9 +160,9 @@ function render(){
   });
 }
 
-/* ===== 儲存（新增 / 編輯） ===== */
-window.save=async()=>{
-  const data={
+/* 儲存（新增 / 編輯） */
+window.save = async ()=>{
+  const data = {
     region:region.value,
     location:location.value,
     title:title.value,
@@ -188,13 +179,12 @@ window.save=async()=>{
     await addDoc(colRef,data);
     toast("已儲存");
   }
-
   clearForm();
 };
 
-/* ===== 編輯 / 刪除 ===== */
-window.edit=id=>{
-  const d=allData.find(x=>x.id===id);
+/* 編輯 */
+window.edit = id=>{
+  const d = allData.find(x=>x.id===id);
   region.value=d.region;
   location.value=d.location;
   title.value=d.title;
@@ -204,55 +194,12 @@ window.edit=id=>{
   editId=id;
 };
 
-window.del=async id=>{
-  if(confirm("確定刪除這筆資料？")){
+/* 刪除 */
+window.del = async id=>{
+  if(confirm("確定刪除？")){
     await deleteDoc(doc(db,"trips",id));
     toast("已刪除");
   }
-};
-
-/* ===== 匯出 ===== */
-window.exportExcel=async()=>{
-  const snap=await getDocs(colRef);
-  const rows=[];
-  snap.forEach(d=>{
-    const x=d.data();
-    rows.push({
-      區域:x.region,
-      地區:x.location,
-      標題:x.title,
-      已訪日期:x.date,
-      內容:x.note,
-      參考網址:(x.links||[]).join(" | ")
-    });
-  });
-  const ws=XLSX.utils.json_to_sheet(rows);
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,"旅遊資料");
-  XLSX.writeFile(wb,"travel.xlsx");
-};
-
-/* ===== 匯入 ===== */
-window.importExcel=()=>{
-  const file=document.getElementById("excel").files[0];
-  if(!file)return;
-  const reader=new FileReader();
-  reader.onload=async e=>{
-    const wb=XLSX.read(e.target.result,{type:"binary"});
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    for(const r of rows){
-      await addDoc(colRef,{
-        region:r["區域"],
-        location:r["地區"],
-        title:r["標題"],
-        date:r["已訪日期"],
-        note:r["內容"],
-        links:(r["參考網址"]||"").split("|").map(s=>s.trim()).filter(Boolean)
-      });
-    }
-    toast("匯入完成");
-  };
-  reader.readAsBinaryString(file);
 };
 
 function clearForm(){
