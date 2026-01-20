@@ -35,17 +35,7 @@ input,select,textarea{
 .note{white-space:pre-wrap}
 .links a{font-size:14px;margin-right:6px}
 .actions button{margin-right:6px}
-
-.save-row{
-  display:flex;
-  align-items:center;
-  gap:12px;
-}
-.saved-text{
-  color:#0a7;
-  font-size:14px;
-  display:none;
-}
+.saved-text{color:#0a7;font-size:14px;display:none}
 </style>
 </head>
 
@@ -61,7 +51,6 @@ input,select,textarea{
   <button onclick="setTab('unvisited')">未訪</button>
 </div>
 
-<!-- 表單 -->
 <div class="card">
   <label>國內 / 國外</label>
   <select id="region">
@@ -70,41 +59,31 @@ input,select,textarea{
   </select>
 
   <label>地區</label>
-  <input id="location" placeholder="例如：桃園 / 京都">
+  <input id="location">
 
   <label>標題</label>
-  <input id="title" placeholder="例如：新興快炒店">
+  <input id="title">
 
   <label>已訪日期</label>
   <input id="date" type="date">
 
   <label>內容</label>
-  <textarea id="note" rows="3"></textarea>
+  <textarea id="note"></textarea>
 
   <label>參考網址（每行一個）</label>
-  <textarea id="links" rows="2"></textarea>
+  <textarea id="links"></textarea>
 
-  <div class="save-row">
-    <button onclick="save()">💾 儲存</button>
-    <span id="savedText" class="saved-text">✔ 已儲存</span>
-  </div>
+  <button onclick="save()">💾 儲存</button>
+  <span id="savedText" class="saved-text">✔ 已儲存</span>
 </div>
 
-<!-- Excel -->
-<div class="card">
-  <button onclick="exportExcel()">Excel 匯出</button>
-  <input type="file" id="excel" style="margin-left:12px">
-  <button onclick="importExcel()">Excel 匯入</button>
-</div>
-
-<!-- 清單 -->
 <div id="list"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc,
-  onSnapshot, deleteDoc, doc, updateDoc, getDocs
+  onSnapshot, deleteDoc, doc, updateDoc
 } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -126,21 +105,77 @@ let editId=null;
 
 window.setTab=t=>{currentTab=t;render();};
 
-/* 🔥 即時同步（手機 / PC / Pad） */
+/* Firestore 同步 */
 onSnapshot(colRef,snap=>{
-  allData=snap.docs.map(d=>({id:d.id,...d.data()}));
+  allData = snap.docs.map(d=>({id:d.id,...d.data()}));
   render();
 });
 
-/* 顯示清單 */
+/* 🔥 關鍵：立即顯示 */
+window.save = async ()=>{
+  const data={
+    region:region.value,
+    location:location.value,
+    title:title.value,
+    date:date.value,
+    note:note.value,
+    links:links.value.split("\n").map(l=>l.trim()).filter(Boolean)
+  };
+
+  if(editId){
+    await updateDoc(doc(db,"trips",editId),data);
+    editId=null;
+  }else{
+    const ref = await addDoc(colRef,data);
+
+    // 👉 立刻顯示在畫面
+    allData.unshift({ id: ref.id, ...data });
+    currentTab="all";
+    render();
+  }
+
+  document.getElementById("savedText").style.display="inline";
+  setTimeout(()=>savedText.style.display="none",2000);
+  clearForm();
+};
+
 function render(){
   const list=document.getElementById("list");
   list.innerHTML="";
 
-  let data=allData.filter(d=>{
-    if(currentTab==="domestic")return d.region==="國內";
-    if(currentTab==="foreign")return d.region==="國外";
-    if(currentTab==="visited")return !!d.date;
-    if(currentTab==="unvisited")return !d.date;
-    return true;
-  })
+  allData
+    .filter(d=>{
+      if(currentTab==="domestic")return d.region==="國內";
+      if(currentTab==="foreign")return d.region==="國外";
+      if(currentTab==="visited")return d.date;
+      if(currentTab==="unvisited")return !d.date;
+      return true;
+    })
+    .forEach(d=>{
+      list.innerHTML+=`
+        <div class="card">
+          <h3>${d.title}</h3>
+          <div class="meta">${d.region}｜${d.location}</div>
+          <div class="date">${d.date ? `✔ 已訪：${d.date}` : "⏳ 未訪"}</div>
+          <div class="note">${d.note||""}</div>
+          <div class="actions">
+            <button onclick="del('${d.id}')">🗑 刪除</button>
+          </div>
+        </div>`;
+    });
+}
+
+window.del=async id=>{
+  if(confirm("確定刪除？")){
+    await deleteDoc(doc(db,"trips",id));
+  }
+};
+
+function clearForm(){
+  region.value="國內";
+  location.value=title.value=date.value=note.value=links.value="";
+}
+</script>
+
+</body>
+</html>
