@@ -35,20 +35,17 @@ input,select,textarea{
 .note{white-space:pre-wrap}
 .links a{font-size:14px;margin-right:6px}
 .actions button{margin-right:6px}
-#toast{
-  position:fixed;
-  bottom:20px;
-  left:50%;
-  transform:translateX(-50%);
-  background:#333;
-  color:#fff;
-  padding:10px 20px;
-  border-radius:20px;
-  opacity:0;
-  transition:.3s;
-  z-index:999;
+
+.save-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
 }
-#toast.show{opacity:1}
+.saved-text{
+  color:#0a7;
+  font-size:14px;
+  display:none;
+}
 </style>
 </head>
 
@@ -87,21 +84,29 @@ input,select,textarea{
   <label>參考網址（每行一個）</label>
   <textarea id="links" rows="2"></textarea>
 
-  <button onclick="save()">💾 儲存</button>
+  <div class="save-row">
+    <button onclick="save()">💾 儲存</button>
+    <span id="savedText" class="saved-text">✔ 已儲存</span>
+  </div>
+</div>
+
+<!-- Excel -->
+<div class="card">
+  <button onclick="exportExcel()">Excel 匯出</button>
+  <input type="file" id="excel" style="margin-left:12px">
+  <button onclick="importExcel()">Excel 匯入</button>
 </div>
 
 <!-- 清單 -->
 <div id="list"></div>
-<div id="toast"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc,
-  onSnapshot, deleteDoc, doc, updateDoc
+  onSnapshot, deleteDoc, doc, updateDoc, getDocs
 } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
-/* Firebase 設定（你的） */
 const firebaseConfig = {
   apiKey: "AIzaSyClxWYydZU6HkXO86nK4cA36Rz0MyhjSYw",
   authDomain: "travel-plan-8e011.firebaseapp.com",
@@ -115,37 +120,35 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const colRef = collection(db,"trips");
 
-let allData = [];
-let currentTab = "all";
-let editId = null;
+let allData=[];
+let currentTab="all";
+let editId=null;
 
-window.setTab = t => { currentTab = t; render(); };
+window.setTab=t=>{currentTab=t;render();};
 
-/* 🔥 唯一資料來源：onSnapshot */
-onSnapshot(colRef, snap => {
-  allData = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+onSnapshot(colRef,snap=>{
+  allData=snap.docs.map(d=>({id:d.id,...d.data()}));
   render();
 });
 
-/* 顯示清單 */
 function render(){
-  const list = document.getElementById("list");
-  list.innerHTML = "";
+  const list=document.getElementById("list");
+  list.innerHTML="";
 
-  let data = allData.filter(d=>{
-    if(currentTab==="domestic") return d.region==="國內";
-    if(currentTab==="foreign") return d.region==="國外";
-    if(currentTab==="visited") return d.date;
-    if(currentTab==="unvisited") return !d.date;
+  let data=allData.filter(d=>{
+    if(currentTab==="domestic")return d.region==="國內";
+    if(currentTab==="foreign")return d.region==="國外";
+    if(currentTab==="visited")return d.date;
+    if(currentTab==="unvisited")return !d.date;
     return true;
   }).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
 
   data.forEach(d=>{
-    const linkHtml = (d.links||[]).map((l,i)=>
+    const linkHtml=(d.links||[]).map((l,i)=>
       `<a href="${l}" target="_blank">連結${i+1}</a>`
     ).join("");
 
-    list.innerHTML += `
+    list.innerHTML+=`
       <div class="card">
         <h3>${d.title}</h3>
         <div class="meta">${d.region}｜${d.location}</div>
@@ -160,9 +163,8 @@ function render(){
   });
 }
 
-/* 儲存（新增 / 編輯） */
-window.save = async ()=>{
-  const data = {
+window.save=async()=>{
+  const data={
     region:region.value,
     location:location.value,
     title:title.value,
@@ -174,17 +176,18 @@ window.save = async ()=>{
   if(editId){
     await updateDoc(doc(db,"trips",editId),data);
     editId=null;
-    toast("已更新");
   }else{
     await addDoc(colRef,data);
-    toast("已儲存");
   }
+
+  document.getElementById("savedText").style.display="inline";
+  setTimeout(()=>document.getElementById("savedText").style.display="none",2000);
+
   clearForm();
 };
 
-/* 編輯 */
-window.edit = id=>{
-  const d = allData.find(x=>x.id===id);
+window.edit=id=>{
+  const d=allData.find(x=>x.id===id);
   region.value=d.region;
   location.value=d.location;
   title.value=d.title;
@@ -194,24 +197,56 @@ window.edit = id=>{
   editId=id;
 };
 
-/* 刪除 */
-window.del = async id=>{
+window.del=async id=>{
   if(confirm("確定刪除？")){
     await deleteDoc(doc(db,"trips",id));
-    toast("已刪除");
   }
+};
+
+window.exportExcel=async()=>{
+  const snap=await getDocs(colRef);
+  const rows=[];
+  snap.forEach(d=>{
+    const x=d.data();
+    rows.push({
+      區域:x.region,
+      地區:x.location,
+      標題:x.title,
+      已訪日期:x.date,
+      內容:x.note,
+      參考網址:(x.links||[]).join(" | ")
+    });
+  });
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"旅遊資料");
+  XLSX.writeFile(wb,"travel.xlsx");
+};
+
+window.importExcel=()=>{
+  const file=document.getElementById("excel").files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const wb=XLSX.read(e.target.result,{type:"binary"});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    for(const r of rows){
+      await addDoc(colRef,{
+        region:r["區域"],
+        location:r["地區"],
+        title:r["標題"],
+        date:r["已訪日期"],
+        note:r["內容"],
+        links:(r["參考網址"]||"").split("|").map(s=>s.trim()).filter(Boolean)
+      });
+    }
+  };
+  reader.readAsBinaryString(file);
 };
 
 function clearForm(){
   region.value="國內";
   location.value=title.value=date.value=note.value=links.value="";
-}
-
-function toast(msg){
-  const t=document.getElementById("toast");
-  t.innerText=msg;
-  t.classList.add("show");
-  setTimeout(()=>t.classList.remove("show"),2000);
 }
 </script>
 
