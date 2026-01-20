@@ -35,6 +35,17 @@ input,select,textarea{
 .note{white-space:pre-wrap}
 .links a{font-size:14px;margin-right:6px}
 .actions button{margin-right:6px}
+
+.save-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.saved-text{
+  color:#0a7;
+  font-size:14px;
+  display:none;
+}
 </style>
 </head>
 
@@ -73,7 +84,17 @@ input,select,textarea{
   <label>參考網址（每行一個）</label>
   <textarea id="links" rows="2"></textarea>
 
-  <button onclick="save()">💾 儲存</button>
+  <div class="save-row">
+    <button onclick="save()">💾 儲存</button>
+    <span id="savedText" class="saved-text">✔ 已儲存</span>
+  </div>
+</div>
+
+<!-- Excel -->
+<div class="card">
+  <button onclick="exportExcel()">Excel 匯出</button>
+  <input type="file" id="excel" style="margin-left:12px">
+  <button onclick="importExcel()">Excel 匯入</button>
 </div>
 
 <!-- 清單 -->
@@ -83,7 +104,7 @@ input,select,textarea{
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc,
-  onSnapshot, deleteDoc, doc, updateDoc
+  onSnapshot, deleteDoc, doc, updateDoc, getDocs
 } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -105,13 +126,13 @@ let editId=null;
 
 window.setTab=t=>{currentTab=t;render();};
 
-/* 即時同步 */
+/* 🔥 即時同步（手機 / PC / Pad） */
 onSnapshot(colRef,snap=>{
   allData=snap.docs.map(d=>({id:d.id,...d.data()}));
   render();
 });
 
-/* 顯示 */
+/* 顯示清單 */
 function render(){
   const list=document.getElementById("list");
   list.innerHTML="";
@@ -122,74 +143,4 @@ function render(){
     if(currentTab==="visited")return !!d.date;
     if(currentTab==="unvisited")return !d.date;
     return true;
-  }).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-
-  data.forEach(d=>{
-    const links=(d.links||[]).map((l,i)=>
-      `<a href="${l}" target="_blank">連結${i+1}</a>`
-    ).join("");
-
-    list.innerHTML+=`
-      <div class="card">
-        <h3>${d.title}</h3>
-        <div class="meta">${d.region}｜${d.location}</div>
-        <div class="date">
-          ${d.date ? `✔ 已訪：${d.date}` : "⏳ 未訪"}
-        </div>
-        <div class="note">${d.note||""}</div>
-        <div class="links">${links}</div>
-        <div class="actions">
-          <button onclick="edit('${d.id}')">✏️ 編輯</button>
-          <button onclick="del('${d.id}')">🗑 刪除</button>
-        </div>
-      </div>`;
-  });
-}
-
-/* 儲存 */
-window.save=async()=>{
-  const data={
-    region:region.value,
-    location:location.value,
-    title:title.value,
-    date:date.value,
-    note:note.value,
-    links:links.value.split("\n").map(l=>l.trim()).filter(Boolean)
-  };
-
-  if(editId){
-    await updateDoc(doc(db,"trips",editId),data);
-    editId=null;
-  }else{
-    await addDoc(colRef,data);
-  }
-
-  /* 🔴 關鍵修正：儲存後一定顯示在下方 */
-  currentTab="all";
-  clearForm();
-};
-
-/* 編輯 / 刪除 */
-window.edit=id=>{
-  const d=allData.find(x=>x.id===id);
-  region.value=d.region;
-  location.value=d.location;
-  title.value=d.title;
-  date.value=d.date||"";
-  note.value=d.note||"";
-  links.value=(d.links||[]).join("\n");
-  editId=id;
-};
-window.del=async id=>{
-  if(confirm("確定刪除？"))
-    await deleteDoc(doc(db,"trips",id));
-};
-
-function clearForm(){
-  region.value="國內";
-  location.value=title.value=date.value=note.value=links.value="";
-}
-</script>
-
-</body>
-</html>
+  })
